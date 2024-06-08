@@ -1,9 +1,8 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QTableWidget, QTableWidgetItem, QWidget, QLineEdit, QPushButton, QLabel, QDateEdit
-from PyQt5.QtCore import QDate
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
-from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QGridLayout, QWidget, QTabWidget
 from datetime import datetime
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction)
+from PyQt5.QtCore import QDate
 
 class BudgetTracker(QMainWindow):
     def __init__(self):

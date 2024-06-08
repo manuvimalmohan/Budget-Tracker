@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QTableWidget, QT
 from PyQt5.QtCore import QDate
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QGridLayout, QWidget, QTabWidget
+from datetime import datetime
 
 class BudgetTracker(QMainWindow):
     def __init__(self):
@@ -132,6 +133,9 @@ class BudgetTracker(QMainWindow):
         if not self.initialize_db():
             print("Failed to initialize the database")
             return
+        
+        # Call this method after initializing the database and setting up the UI components
+        self.load_latest_accounting_details()
 
         # Refresh the table view
         self.refresh_table()  # Call the refresh method
@@ -181,6 +185,7 @@ class BudgetTracker(QMainWindow):
         query.exec_("""
             CREATE TABLE IF NOT EXISTS accounting_details (
                 id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
+                date TEXT NOT NULL,
                 account_name TEXT NOT NULL,
                 checking REAL,
                 savings REAL,
@@ -189,13 +194,54 @@ class BudgetTracker(QMainWindow):
                 total REAL NOT NULL
             )
         """)
+
         return True
-    
+
+    def load_latest_accounting_details(self):
+        # Check if the database connection is open
+        if not self.db.isOpen():
+            if not self.db.open():
+                print("Error: ", self.db.lastError().text())
+                return
+
+        query = QSqlQuery()
+
+        # Fetch the latest accounting details for each main account
+        for main_account in self.main_accounts:
+            query.prepare("""
+                SELECT checking, savings, saver, kiwi_saver, total
+                FROM accounting_details
+                WHERE account_name = :account_name
+                ORDER BY date DESC
+                LIMIT 1
+            """)
+            query.bindValue(":account_name", main_account)
+            if query.exec_() and query.next():
+                # Set the values of the line edits to the fetched data
+                self.account_balance_widgets[f"{main_account} Checking"].setText(str(query.value(0)))
+                self.account_balance_widgets[f"{main_account} Savings"].setText(str(query.value(1)))
+                
+                # Only set "Saver" and "Kiwi Saver" if they exist for the account
+                if "Saver" in self.sub_accounts[main_account]:
+                    self.account_balance_widgets[f"{main_account} Saver"].setText(str(query.value(2)))
+                if "Kiwi Saver" in self.sub_accounts[main_account]:
+                    self.account_balance_widgets[f"{main_account} Kiwi Saver"].setText(str(query.value(3)))
+                
+                # Set the total balance
+                self.account_balance_widgets[f"{main_account} Total"].setText(str(query.value(4)))
+            else:
+                print(f"No accounting details found for {main_account} or failed to fetch data.")
+
     def save_accounting_details(self):
         query = QSqlQuery()
         for main_account in self.main_accounts:
             # Initialize a dictionary to hold the account data
-            data = {'account_name': main_account, 'total': self.account_balance_widgets[f"{main_account} Total"].text()}
+            data = {
+                'account_name': main_account,
+                # Use Python's datetime.now() to get the current local date and time
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'total': self.account_balance_widgets[f"{main_account} Total"].text()
+            }
 
             # Iterate over each sub-account and safely get the text or set a default value
             for sub_account in ["Checking", "Savings", "Saver", "Kiwi Saver"]:
@@ -204,13 +250,16 @@ class BudgetTracker(QMainWindow):
 
             # Insert the data into the database
             query.prepare("""
-                INSERT INTO accounting_details (account_name, checking, savings, saver, kiwi_saver, total)
-                VALUES (:account_name, :checking, :savings, :saver, :kiwi_saver, :total)
+                INSERT INTO accounting_details (account_name, date, checking, savings, saver, kiwi_saver, total)
+                VALUES (:account_name, :date, :checking, :savings, :saver, :kiwi_saver, :total)
             """)
+            # Bind the values for the INSERT
             for key, value in data.items():
                 query.bindValue(f":{key}", value)
             if not query.exec_():
                 print("Update error: ", query.lastError().text())
+            else:
+                print(f"Accounting details for {main_account} updated successfully.")
 
     def refresh_table(self):
         # Clear the existing table content

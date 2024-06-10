@@ -136,6 +136,31 @@ class BudgetTracker(QMainWindow):
         # Call this method after initializing the database and setting up the UI components
         self.load_latest_accounting_details()
 
+        # Create the third tab for monthly accounts
+        self.tab3 = QWidget()
+        self.tabs.addTab(self.tab3, "Monthly Accounts")
+
+        # Layout for the third tab
+        self.tab3_layout = QGridLayout(self.tab3)
+
+        # Create a dropdown for months
+        self.month_input = QComboBox()
+        # Assuming you have a method to get the list of months from the database
+        self.month_list = self.get_month_list()
+        self.month_input.addItems(self.month_list)
+
+        # Create a table to display monthly spending
+        self.monthly_spending_table = QTableWidget()
+        self.monthly_spending_table.setColumnCount(2)  # For Category and Amount
+        self.monthly_spending_table.setHorizontalHeaderLabels(["Category", "Amount"])
+
+        # Add widgets to the third tab layout
+        self.tab3_layout.addWidget(self.month_input, 0, 0)
+        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0, 1, -1)  # Span all columns
+
+        # Connect the month dropdown selection change to the update function
+        self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
+
         # Refresh the table view
         self.refresh_table()  # Call the refresh method
 
@@ -318,6 +343,80 @@ class BudgetTracker(QMainWindow):
         if not query.exec_():
             print("Error: ", query.lastError().text())
 
+    # Add the new methods for the third tab functionality here
+    def get_month_list(self):
+
+        if not self.db.isOpen():
+            if not self.db.open():
+                print("Error: ", self.db.lastError().text())
+                return []
+
+        month_list = []
+        query = QSqlQuery(self.db)
+
+        # Execute a simple query to fetch all dates
+        if query.exec_("SELECT DISTINCT date FROM transactions"):
+            while query.next():
+                # Fetch the date as a string from the database
+                date_str = query.value(0)
+                # Convert the date string to a datetime object
+                try:
+                    date_obj = datetime.strptime(date_str, '%d-%b-%y')
+                    # Format the date as 'YYYY-MM' and add to the list if not already present
+                    month_year_str = date_obj.strftime('%Y-%m')
+                    if month_year_str not in month_list:
+                        month_list.append(month_year_str)
+                except ValueError as e:
+                    print(f"Date conversion error: {e}")
+
+        else:
+            error = query.lastError().text()
+            print(f"Query failed: {error}")
+        
+        # At the end of your get_month_list function, before returning the list
+        formatted_month_list = []
+        for month_year_str in month_list:
+            # Convert 'YYYY-MM' to 'MMM-YYYY'
+            date_obj = datetime.strptime(month_year_str, '%Y-%m')
+            formatted_month_list.append(date_obj.strftime('%b-%Y'))
+
+        return formatted_month_list
+
+    def update_monthly_spending_table(self):
+        selected_month_year = self.month_input.currentText()
+
+        try:
+            # Convert the selected month-year string to datetime object
+            selected_date = datetime.strptime(selected_month_year, '%b-%Y')
+            # Format the selected date to match the database format 'MMM-YY'
+            formatted_selected_date = selected_date.strftime('%b-%y')
+
+            # Prepare the SQL query to sum up spending by category for the selected month
+            query_str = f"""
+                SELECT category, SUM(amount) 
+                FROM transactions 
+                WHERE date LIKE '%{formatted_selected_date}' 
+                GROUP BY category
+            """
+            query = QSqlQuery(self.db)
+            if query.exec_(query_str):
+                # Clear the table before inserting new data
+                self.monthly_spending_table.setRowCount(0)
+                row = 0
+                while query.next():
+                    # Insert new rows into the table for each category
+                    self.monthly_spending_table.insertRow(row)
+                    # Category
+                    self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(query.value(0)))
+                    # Summed amount
+                    self.monthly_spending_table.setItem(row, 1, QTableWidgetItem(str(query.value(1))))
+                    row += 1
+            else:
+                error = query.lastError().text()
+                # Handle any errors appropriately
+        except ValueError as e:
+            # Handle any date conversion errors appropriately
+            print(f"Something failed")
 
     def closeEvent(self, event):
          self.db.close()

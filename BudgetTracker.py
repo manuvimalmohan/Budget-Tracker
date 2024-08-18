@@ -1,8 +1,11 @@
 import sys
+from turtle import pd
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from datetime import datetime
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction)
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
 from PyQt5.QtCore import QDate
+#import pandas as pd
+#from sqlalchemy import create_engine
 
 class BudgetTracker(QMainWindow):
     def __init__(self):
@@ -163,6 +166,55 @@ class BudgetTracker(QMainWindow):
 
         # Refresh the table view
         self.refresh_table()  # Call the refresh method
+
+        # Create the fourth tab for Excel file input
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Create the fourth tab for Excel file input
+        self.tab4 = QWidget()
+        self.tabs.addTab(self.tab4, "Excel Input")
+
+        # Layout for the fourth tab
+        self.tab4_layout = QGridLayout(self.tab4)
+
+        # Create a button for selecting an Excel file
+        self.select_file_button = QPushButton('Select Excel File')
+        self.select_file_button.clicked.connect(self.open_file_dialog)
+        self.tab4_layout.addWidget(self.select_file_button, 0, 0)
+
+    def read_and_update_database(file_path, database_path):
+        # Read the Excel file into a pandas DataFrame
+        df = pd.read_excel(file_path)
+        
+        # Replace NaN values with 0 for expenditures not made in certain months
+        df.fillna(0, inplace=True)
+        
+        # Create a database engine using the database path
+        engine = create_engine(f'sqlite:///{database_path}')
+        
+        # Assuming you have a table named 'expenditures' in your 'budget_tracker.db'
+        table_name = 'expenditures'
+        
+        # Loop through each month's column in DataFrame starting from index 1 since index 0 is categories
+        for month_col in df.columns[1:]:
+            # Create a temporary DataFrame with 'Category' and 'Expenditure' columns
+            temp_df = pd.DataFrame({
+                'Category': df.iloc[:, 0],
+                'Expenditure': df[month_col],
+                'Month': month_col  # Add the month as a column for reference
+            })
+            
+            # Append data to the database
+            temp_df.to_sql(table_name, con=engine, if_exists='append', index=False)
+
+    def open_file_dialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
+        if file_name:
+            # Call the function to handle the file and update the database
+            read_and_update_database(file_name, 'path_to_your_budget_tracker.db')
 
     def compute_total(self):
         # Iterate through each main account

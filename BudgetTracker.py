@@ -1,11 +1,10 @@
 import sys
-from turtle import pd
+import os
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
 from PyQt5.QtCore import QDate
-#import pandas as pd
-#from sqlalchemy import create_engine
+import pandas as pd  # Import pandas
 
 class BudgetTracker(QMainWindow):
     def __init__(self):
@@ -183,39 +182,6 @@ class BudgetTracker(QMainWindow):
         self.select_file_button.clicked.connect(self.open_file_dialog)
         self.tab4_layout.addWidget(self.select_file_button, 0, 0)
 
-    def read_and_update_database(file_path, database_path):
-        # Read the Excel file into a pandas DataFrame
-        df = pd.read_excel(file_path)
-        
-        # Replace NaN values with 0 for expenditures not made in certain months
-        df.fillna(0, inplace=True)
-        
-        # Create a database engine using the database path
-        engine = create_engine(f'sqlite:///{database_path}')
-        
-        # Assuming you have a table named 'expenditures' in your 'budget_tracker.db'
-        table_name = 'expenditures'
-        
-        # Loop through each month's column in DataFrame starting from index 1 since index 0 is categories
-        for month_col in df.columns[1:]:
-            # Create a temporary DataFrame with 'Category' and 'Expenditure' columns
-            temp_df = pd.DataFrame({
-                'Category': df.iloc[:, 0],
-                'Expenditure': df[month_col],
-                'Month': month_col  # Add the month as a column for reference
-            })
-            
-            # Append data to the database
-            temp_df.to_sql(table_name, con=engine, if_exists='append', index=False)
-
-    def open_file_dialog(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
-        if file_name:
-            # Call the function to handle the file and update the database
-            read_and_update_database(file_name, 'path_to_your_budget_tracker.db')
-
     def compute_total(self):
         # Iterate through each main account
         for main_account in self.main_accounts:
@@ -235,9 +201,14 @@ class BudgetTracker(QMainWindow):
             total_line_edit.setText(str(total))
 
     def initialize_db(self):
+        db_file = 'budget_tracker.db' 
+        # Check if the database file exists 
+        if not os.path.isfile(db_file): 
+            print(f"Database file {db_file} does not exist. Creating a new one.")
+                  
         # Connect to the SQLite database
         self.db = QSqlDatabase.addDatabase('QSQLITE')
-        self.db.setDatabaseName('budget_tracker.db')
+        self.db.setDatabaseName(db_file)
 
         # Open the connection
         if not self.db.open():
@@ -469,6 +440,46 @@ class BudgetTracker(QMainWindow):
         except ValueError as e:
             # Handle any date conversion errors appropriately
             print(f"Something failed")
+            
+    def read_and_update_database(self, file_path):
+        # Read the Excel file into a pandas DataFrame
+        df = pd.read_excel(file_path)
+        
+        # Replace NaN values with 0 for expenditures not made in certain months
+        df.fillna(0, inplace=True)
+        
+        # Check if the database connection is open
+        if not self.db.isOpen():
+            if not self.db.open():
+                print("Error: ", self.db.lastError().text())
+                return []
+        
+        # Loop through each month's column in DataFrame starting from index 1 since index 0 is categories
+        for month_col in df.columns[1:]:
+            # Extract the month and year from the column name
+            month_year = datetime.strptime(month_col, '%b-%y')
+            # Assume the first day of the month for the date
+            date_col = month_year.strftime('%Y-%m-01')
+
+            # Create a temporary DataFrame with 'Category', 'Amount', and 'Date' columns
+            temp_df = pd.DataFrame({
+                'category': df.iloc[:, 0],
+                'amount': df[month_col].abs(),  # Convert negative amounts to positive
+                'date': date_col
+            })
+            
+            # Add each transaction to the database 
+            for index, row in temp_df.iterrows(): 
+                self.add_transaction(row['date'], row['category'], row['amount'])
+
+
+    def open_file_dialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
+        if file_name:
+            # Call the function to handle the file and update the database
+            self.read_and_update_database(file_name)
 
     def closeEvent(self, event):
          self.db.close()
@@ -478,5 +489,3 @@ if __name__ == "__main__":
     window = BudgetTracker()
     window.show()
     sys.exit(app.exec_())
-
-

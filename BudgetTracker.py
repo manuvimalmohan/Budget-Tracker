@@ -201,14 +201,19 @@ class BudgetTracker(QMainWindow):
             total_line_edit.setText(str(total))
 
     def initialize_db(self):
-        db_file = os.path.join(os.path.dirname(__file__), 'budget_tracker.db')
+        db_name = 'budget_tracker.db'
+        db_path = os.path.join(os.path.dirname(__file__), db_name)
+
         # Check if the database file exists 
-        if not os.path.isfile(db_file): 
-            print(f"Database file {db_file} does not exist. Creating a new one.")
+        if not os.path.isfile(db_path): 
+            print(f"Database file {db_path} does not exist. Creating a new one.")
+            
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
                   
         # Connect to the SQLite database
         self.db = QSqlDatabase.addDatabase('QSQLITE')
-        self.db.setDatabaseName(db_file)
+        self.db.setDatabaseName(db_path)
 
         # Open the connection
         if not self.db.open():

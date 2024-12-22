@@ -201,7 +201,7 @@ class BudgetTracker(QMainWindow):
             total_line_edit.setText(str(total))
 
     def initialize_db(self):
-        db_file = 'budget_tracker.db' 
+        db_file = os.path.join(os.path.dirname(__file__), 'budget_tracker.db')
         # Check if the database file exists 
         if not os.path.isfile(db_file): 
             print(f"Database file {db_file} does not exist. Creating a new one.")
@@ -389,11 +389,11 @@ class BudgetTracker(QMainWindow):
                     month_year_str = date_obj.strftime('%Y-%m')
                     if month_year_str not in month_list:
                         month_list.append(month_year_str)
-                except ValueError as e:
+                except ValueError:
                     print(f"Date conversion error: {e}")
 
         else:
-            error = query.lastError().text()
+            print("Query failed: ", query.lastError().text())
             print(f"Query failed: {error}")
         
         # At the end of your get_month_list function, before returning the list
@@ -481,9 +481,14 @@ class BudgetTracker(QMainWindow):
             # Call the function to handle the file and update the database
             self.read_and_update_database(file_name)
 
-    def closeEvent(self, event):
-         self.db.close()
-
+    def closeEvent(self, event): 
+        # Close the database connection before exiting 
+        if hasattr(self, 'db') and self.db.isOpen(): 
+            self.db.close() 
+            print("Database connection closed.")
+            
+        event.accept()
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = BudgetTracker()

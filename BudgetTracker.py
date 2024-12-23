@@ -4,6 +4,7 @@ from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
 from PyQt5.QtCore import QDate
+from PyQt5.QtWidgets import QMessageBox
 import pandas as pd  # Import pandas
 
 class BudgetTracker(QMainWindow):
@@ -167,9 +168,9 @@ class BudgetTracker(QMainWindow):
         self.refresh_table()  # Call the refresh method
 
         # Create the fourth tab for Excel file input
-        self.setup_ui()
+        self.import_excel()
 
-    def setup_ui(self):
+    def import_excel(self):
         # Create the fourth tab for Excel file input
         self.tab4 = QWidget()
         self.tabs.addTab(self.tab4, "Excel Input")
@@ -181,6 +182,10 @@ class BudgetTracker(QMainWindow):
         self.select_file_button = QPushButton('Select Excel File')
         self.select_file_button.clicked.connect(self.open_file_dialog)
         self.tab4_layout.addWidget(self.select_file_button, 0, 0)
+        # Create a button to clear transactions
+        self.clear_transactions_button = QPushButton('Clear Transactions')
+        self.clear_transactions_button.clicked.connect(self.clear_transactions)
+        self.tab4_layout.addWidget(self.clear_transactions_button, 1, 0)
 
     def compute_total(self):
         # Iterate through each main account
@@ -475,6 +480,8 @@ class BudgetTracker(QMainWindow):
             for index, row in temp_df.iterrows(): 
                 self.add_transaction(row['date'], row['category'], row['amount'])
 
+        # Show a message box indicating the import is complete
+        QMessageBox.information(self, "Import Complete", "The spreadsheet has been successfully imported.")
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -483,6 +490,14 @@ class BudgetTracker(QMainWindow):
         if file_name:
             # Call the function to handle the file and update the database
             self.read_and_update_database(file_name)
+
+    def clear_transactions(self):
+        query = QSqlQuery()
+        if query.exec_("DELETE FROM transactions"):
+            print("All transactions have been cleared.")
+            self.refresh_table()  # Refresh the table view to reflect the changes
+        else:
+            print("Error: ", query.lastError().text())
 
     def closeEvent(self, event): 
         # Close the database connection before exiting 

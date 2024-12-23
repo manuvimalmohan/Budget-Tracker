@@ -394,11 +394,10 @@ class BudgetTracker(QMainWindow):
                     if month_year_str not in month_list:
                         month_list.append(month_year_str)
                 except ValueError:
-                    print(f"Date conversion error: {e}")
+                    print(f"Date conversion error: {date_str}")
 
         else:
             print("Query failed: ", query.lastError().text())
-            print(f"Query failed: {error}")
         
         # At the end of your get_month_list function, before returning the list
         formatted_month_list = []

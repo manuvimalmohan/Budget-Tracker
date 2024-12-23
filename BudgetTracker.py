@@ -246,7 +246,6 @@ class BudgetTracker(QMainWindow):
                 total REAL NOT NULL
             )
         """)
-
         return True
 
     def load_latest_accounting_details(self):

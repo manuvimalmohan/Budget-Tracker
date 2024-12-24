@@ -16,7 +16,35 @@ class BudgetTracker(QMainWindow):
         # Create a tab widget
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
+        
+        # Create the first tab for item entry and display
+        self.create_tab1()
+        
+        # Create the second tab for accounting details
+        self.create_tab2()
 
+        if not self.initialize_db():
+            print("Failed to initialize the database")
+            return
+        
+        # Call this method after initializing the database and setting up the UI components
+        self.load_latest_accounting_details()
+
+        # Create the third tab for monthly spending
+        self.create_tab3()
+
+        # Refresh the table view
+        self.refresh_table()
+
+        # Create the fourth tab for Excel file input
+        self.import_excel()
+                
+        # Add a menu item to exit
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        self.menuBar().addAction(exit_action)
+        
+    def create_tab1(self):
         # Create the first tab for item entry and display
         self.tab1 = QWidget()
         self.tabs.addTab(self.tab1, "Item Entry")
@@ -66,7 +94,8 @@ class BudgetTracker(QMainWindow):
         # Add the table to the layout with appropriate row span to accommodate all rows
         self.tab1_layout.addWidget(self.table, 0, 1, 10, 1)  # Span 10 rows instead of 4
 
-        # Create the second tab for accounting details
+    def create_tab2(self):
+                # Create the second tab for accounting details
         self.tab2 = QWidget()
         self.tabs.addTab(self.tab2, "Accounting Details")
 
@@ -127,18 +156,7 @@ class BudgetTracker(QMainWindow):
         self.tab2_layout.addWidget(update_button, 1, 0, 1, -1)  # Span all columns
         update_button.clicked.connect(self.save_accounting_details)
 
-        # Add a menu item to exit
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        self.menuBar().addAction(exit_action)
-
-        if not self.initialize_db():
-            print("Failed to initialize the database")
-            return
-        
-        # Call this method after initializing the database and setting up the UI components
-        self.load_latest_accounting_details()
-
+    def create_tab3(self):
         # Create the third tab for monthly accounts
         self.tab3 = QWidget()
         self.tabs.addTab(self.tab3, "Monthly Accounts")
@@ -163,13 +181,7 @@ class BudgetTracker(QMainWindow):
 
         # Connect the month dropdown selection change to the update function
         self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
-
-        # Refresh the table view
-        self.refresh_table()  # Call the refresh method
-
-        # Create the fourth tab for Excel file input
-        self.import_excel()
-
+        
     def import_excel(self):
         # Create the fourth tab for Excel file input
         self.tab4 = QWidget()
@@ -330,7 +342,7 @@ class BudgetTracker(QMainWindow):
             self.table.insertRow(row_position)
             self.table.setItem(row_position, 0, QTableWidgetItem(query.value(0)))
             self.table.setItem(row_position, 1, QTableWidgetItem(query.value(1)))
-            self.table.setItem(row_position, 2, QTableWidgetItem(str(query.value(2))))
+            self.table.setItem(row_position, 2, QTableWidgetItem(str(f"{query.value(2):.2f}")))
 
         # Reverse the order of the rows to show the most recent at the top
         for row in range(self.table.rowCount() // 2):
@@ -440,7 +452,8 @@ class BudgetTracker(QMainWindow):
                     # Category
                     self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(query.value(0)))
                     # Summed amount
-                    self.monthly_spending_table.setItem(row, 1, QTableWidgetItem(str(query.value(1))))
+                    self.monthly_spending_table.setItem(
+                        row, 1, QTableWidgetItem(f"{query.value(1):.2f}"))
                     row += 1
             else:
                 error = query.lastError().text()
@@ -467,7 +480,7 @@ class BudgetTracker(QMainWindow):
             # Extract the month and year from the column name
             month_year = datetime.strptime(month_col, '%b-%y')
             # Assume the first day of the month for the date
-            date_col = month_year.strftime('%Y-%m-01')
+            date_col = month_year.strftime('%d-%b-%y')
 
             # Create a temporary DataFrame with 'Category', 'Amount', and 'Date' columns
             temp_df = pd.DataFrame({
@@ -482,6 +495,9 @@ class BudgetTracker(QMainWindow):
 
         # Show a message box indicating the import is complete
         QMessageBox.information(self, "Import Complete", "The spreadsheet has been successfully imported.")
+        
+        # Refresh the table view
+        self.refresh_table()  # Call the refresh method
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -495,9 +511,14 @@ class BudgetTracker(QMainWindow):
         query = QSqlQuery()
         if query.exec_("DELETE FROM transactions"):
             print("All transactions have been cleared.")
+            # Show a message box indicating transactions have been cleared
+            QMessageBox.information(self, "Transactions Cleared", "Transactions in database has been cleared.")
             self.refresh_table()  # Refresh the table view to reflect the changes
         else:
             print("Error: ", query.lastError().text())
+            
+        # Refresh the table view
+        self.refresh_table()  # Call the refresh method
 
     def closeEvent(self, event): 
         # Close the database connection before exiting 

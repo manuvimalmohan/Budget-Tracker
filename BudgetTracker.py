@@ -179,10 +179,12 @@ class BudgetTracker(QMainWindow):
     def refresh_monthly_spending_table(self):
         #Get the list of months from the database
         self.month_list = self.get_month_list()
+        self.month_input.clear()
         self.month_input.addItems(self.month_list)
 
-        # Connect the month dropdown selection change to the update function
-        self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
+        # Connect the month dropdown selection change to the update function if month_input is not empty
+        if self.month_input.count() > 0:
+            self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
         
     def import_excel_tab(self):
         # Create the fourth tab for Excel file input
@@ -461,8 +463,11 @@ class BudgetTracker(QMainWindow):
                 error = query.lastError().text()
                 # Handle any errors appropriately
         except ValueError as e:
-            # Handle any date conversion errors appropriately
-            print(f"Something failed")
+            if "time data '' does not match format '%b-%Y'" in str(e):
+                self.monthly_spending_table.setRowCount(0)
+            else:
+                # Handle other failures in table handling
+                print(f"Updating monthly spending table failed: {e}")
             
     def read_and_update_database(self, file_path):
         # Read the Excel file into a pandas DataFrame
@@ -514,10 +519,10 @@ class BudgetTracker(QMainWindow):
     def clear_transactions(self):
         query = QSqlQuery()
         if query.exec_("DELETE FROM transactions"):
-            print("All transactions have been cleared.")
             # Show a message box indicating transactions have been cleared
             QMessageBox.information(self, "Transactions Cleared", "Transactions in database has been cleared.")
             self.refresh_ledger_table()  # Refresh the table view to reflect the changes
+            self.refresh_monthly_spending_table()
         else:
             print("Error: ", query.lastError().text())
 

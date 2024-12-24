@@ -18,10 +18,10 @@ class BudgetTracker(QMainWindow):
         self.setCentralWidget(self.tabs)
         
         # Create the first tab for item entry and display
-        self.create_tab1()
+        self.create_transaction_entry_tab()
         
         # Create the second tab for accounting details
-        self.create_tab2()
+        self.create_account_details_tab()
 
         if not self.initialize_db():
             print("Failed to initialize the database")
@@ -31,20 +31,20 @@ class BudgetTracker(QMainWindow):
         self.load_latest_accounting_details()
 
         # Create the third tab for monthly spending
-        self.create_tab3()
+        self.create_monthly_spending_tab()
 
-        # Refresh the table view
-        self.refresh_table()
+        # Refresh the table view in Tab 1 (transaction entry) to show the latest transactions
+        self.refresh_ledger_table()
 
         # Create the fourth tab for Excel file input
-        self.import_excel()
+        self.import_excel_tab()
                 
         # Add a menu item to exit
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
         self.menuBar().addAction(exit_action)
         
-    def create_tab1(self):
+    def create_transaction_entry_tab(self):
         # Create the first tab for item entry and display
         self.tab1 = QWidget()
         self.tabs.addTab(self.tab1, "Item Entry")
@@ -82,19 +82,19 @@ class BudgetTracker(QMainWindow):
         self.tab1_layout.addWidget(self.submit_button, 3, 0)
 
         # Create a table to display transactions
-        self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Date", "Category", "Amount"])
-        self.table.setRowCount(10)  # Set the number of rows you want to be visible
+        self.tab1_ledger_table = QTableWidget()
+        self.tab1_ledger_table.setColumnCount(3)
+        self.tab1_ledger_table.setHorizontalHeaderLabels(["Date", "Category", "Amount"])
+        self.tab1_ledger_table.setRowCount(10)  # Set the number of rows you want to be visible
 
         # Set minimum row heights to ensure all rows are visible
         for row in range(10):
-            self.table.setRowHeight(row, 20)  # Adjust the row height as needed
+            self.tab1_ledger_table.setRowHeight(row, 20)  # Adjust the row height as needed
 
         # Add the table to the layout with appropriate row span to accommodate all rows
-        self.tab1_layout.addWidget(self.table, 0, 1, 10, 1)  # Span 10 rows instead of 4
+        self.tab1_layout.addWidget(self.tab1_ledger_table, 0, 1, 10, 1)  # Span 10 rows instead of 4
 
-    def create_tab2(self):
+    def create_account_details_tab(self):
                 # Create the second tab for accounting details
         self.tab2 = QWidget()
         self.tabs.addTab(self.tab2, "Accounting Details")
@@ -150,39 +150,41 @@ class BudgetTracker(QMainWindow):
         # Add the table widget to the layout
         self.tab2_layout.addWidget(self.table_widget, 0, 0, 1, -1)  # Span all columns
 
-        # Add one update button at the bottom of the right top quadrant
-        update_button = QPushButton("Update")
         # Add the update button below the table
+        update_button = QPushButton("Update")
         self.tab2_layout.addWidget(update_button, 1, 0, 1, -1)  # Span all columns
         update_button.clicked.connect(self.save_accounting_details)
 
-    def create_tab3(self):
+    def create_monthly_spending_tab(self):
         # Create the third tab for monthly accounts
         self.tab3 = QWidget()
         self.tabs.addTab(self.tab3, "Monthly Accounts")
 
         # Layout for the third tab
         self.tab3_layout = QGridLayout(self.tab3)
-
-        # Create a dropdown for months
-        self.month_input = QComboBox()
-        # Assuming you have a method to get the list of months from the database
-        self.month_list = self.get_month_list()
-        self.month_input.addItems(self.month_list)
-
+               
         # Create a table to display monthly spending
         self.monthly_spending_table = QTableWidget()
         self.monthly_spending_table.setColumnCount(2)  # For Category and Amount
         self.monthly_spending_table.setHorizontalHeaderLabels(["Category", "Amount"])
 
-        # Add widgets to the third tab layout
+        # Create a dropdown for months
+        self.month_input = QComboBox()
+        
+        # Referesh the monthly spending table
+        self.refresh_monthly_spending_table()
         self.tab3_layout.addWidget(self.month_input, 0, 0)
-        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0, 1, -1)  # Span all columns
+        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0, 1, -1)  # Span all columns 
+    
+    def refresh_monthly_spending_table(self):
+        #Get the list of months from the database
+        self.month_list = self.get_month_list()
+        self.month_input.addItems(self.month_list)
 
         # Connect the month dropdown selection change to the update function
         self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
         
-    def import_excel(self):
+    def import_excel_tab(self):
         # Create the fourth tab for Excel file input
         self.tab4 = QWidget()
         self.tabs.addTab(self.tab4, "Excel Input")
@@ -329,32 +331,32 @@ class BudgetTracker(QMainWindow):
             else:
                 print(f"Accounting details for {main_account} updated successfully.")
 
-    def refresh_table(self):
+    def refresh_ledger_table(self):
         # Clear the existing table content
-        self.table.setRowCount(0)
+        self.tab1_ledger_table.setRowCount(0)
 
         # Execute a query to fetch the latest 10 data entries, ordered by id descending
         query = QSqlQuery("SELECT date, category, amount FROM transactions ORDER BY id DESC LIMIT 10")
 
         # Populate the table with the data
         while query.next():
-            row_position = self.table.rowCount()
-            self.table.insertRow(row_position)
-            self.table.setItem(row_position, 0, QTableWidgetItem(query.value(0)))
-            self.table.setItem(row_position, 1, QTableWidgetItem(query.value(1)))
-            self.table.setItem(row_position, 2, QTableWidgetItem(str(f"{query.value(2):.2f}")))
+            row_position = self.tab1_ledger_table.rowCount()
+            self.tab1_ledger_table.insertRow(row_position)
+            self.tab1_ledger_table.setItem(row_position, 0, QTableWidgetItem(query.value(0)))
+            self.tab1_ledger_table.setItem(row_position, 1, QTableWidgetItem(query.value(1)))
+            self.tab1_ledger_table.setItem(row_position, 2, QTableWidgetItem(str(f"{query.value(2):.2f}")))
 
         # Reverse the order of the rows to show the most recent at the top
-        for row in range(self.table.rowCount() // 2):
-            for col in range(self.table.columnCount()):
-                top_item = self.table.takeItem(row, col)
-                bottom_row = self.table.rowCount() - row - 1
-                bottom_item = self.table.takeItem(bottom_row, col)
-                self.table.setItem(row, col, bottom_item)
-                self.table.setItem(bottom_row, col, top_item)
+        for row in range(self.tab1_ledger_table.rowCount() // 2):
+            for col in range(self.tab1_ledger_table.columnCount()):
+                top_item = self.tab1_ledger_table.takeItem(row, col)
+                bottom_row = self.tab1_ledger_table.rowCount() - row - 1
+                bottom_item = self.tab1_ledger_table.takeItem(bottom_row, col)
+                self.tab1_ledger_table.setItem(row, col, bottom_item)
+                self.tab1_ledger_table.setItem(bottom_row, col, top_item)
 
         # Optionally, adjust column widths for better readability
-        self.table.resizeColumnsToContents()
+        self.tab1_ledger_table.resizeColumnsToContents()
 
     def add_transaction_from_input(self):
         # Get input values
@@ -368,8 +370,8 @@ class BudgetTracker(QMainWindow):
         # Clear input fields
         self.amount_input.clear()
 
-        # Refresh the table view
-        self.refresh_table()  # Call the refresh method
+        # Refresh the table view to show the latest transactions
+        self.refresh_ledger_table()
 
     def add_transaction(self, date, category, amount):
         # Create a QSqlQuery object
@@ -496,8 +498,10 @@ class BudgetTracker(QMainWindow):
         # Show a message box indicating the import is complete
         QMessageBox.information(self, "Import Complete", "The spreadsheet has been successfully imported.")
         
-        # Refresh the table view
-        self.refresh_table()  # Call the refresh method
+        # Refresh the table view to show the latest transactions
+        self.refresh_ledger_table()
+        # Refresh the monthly spending table using latest import
+        self.refresh_monthly_spending_table()
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -513,12 +517,9 @@ class BudgetTracker(QMainWindow):
             print("All transactions have been cleared.")
             # Show a message box indicating transactions have been cleared
             QMessageBox.information(self, "Transactions Cleared", "Transactions in database has been cleared.")
-            self.refresh_table()  # Refresh the table view to reflect the changes
+            self.refresh_ledger_table()  # Refresh the table view to reflect the changes
         else:
             print("Error: ", query.lastError().text())
-            
-        # Refresh the table view
-        self.refresh_table()  # Call the refresh method
 
     def closeEvent(self, event): 
         # Close the database connection before exiting 

@@ -38,10 +38,11 @@ class BudgetTracker(QMainWindow):
 
         # Create the fourth tab for Excel file input
         self.import_excel_tab()
-                
-        # Add a menu item to exit
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
+        self.setup_menu()
+        
+    def setup_menu(self): 
+        exit_action = QAction("Exit", self) 
+        exit_action.triggered.connect(self.close) 
         self.menuBar().addAction(exit_action)
         
     def create_transaction_entry_tab(self):
@@ -95,7 +96,7 @@ class BudgetTracker(QMainWindow):
         self.tab1_layout.addWidget(self.tab1_ledger_table, 0, 1, 10, 1)  # Span 10 rows instead of 4
 
     def create_account_details_tab(self):
-                # Create the second tab for accounting details
+        # Create the second tab for accounting details
         self.tab2 = QWidget()
         self.tabs.addTab(self.tab2, "Accounting Details")
 

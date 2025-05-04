@@ -24,7 +24,7 @@ class BudgetTracker(QMainWindow):
         self.create_account_details_tab()
 
         if not self.initialize_db():
-            print("Failed to initialize the database")
+            print("Failed to initialize the databases")
             return
         
         # Call this method after initializing the database and setting up the UI components

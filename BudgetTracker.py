@@ -10,7 +10,7 @@ import pandas as pd  # Import pandas
 class BudgetTracker(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Budget Tracker")
+        self.setWindowTitle("Budget Tracker 2.0")
         self.setGeometry(100, 100, 800, 600)
 
         # Create a tab widget

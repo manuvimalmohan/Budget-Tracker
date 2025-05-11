@@ -69,6 +69,8 @@ class BudgetTracker(QMainWindow):
         self.category_input.addItems(category_list)
 
         self.amount_input = QLineEdit()
+        # Add return key handling to amount input
+        self.amount_input.returnPressed.connect(self.add_transaction_from_input)
 
         # Create a submit button
         self.submit_button = QPushButton('Submit')
@@ -136,6 +138,8 @@ class BudgetTracker(QMainWindow):
                     self.account_balance_widgets[f"{main_account} {sub_account}"] = sub_account_line_edit
                     self.table_widget.setCellWidget(row, col, sub_account_line_edit)
                     sub_account_line_edit.textChanged.connect(self.compute_total)
+                    # Add return key handling
+                    sub_account_line_edit.returnPressed.connect(self.save_accounting_details)
                 else:
                     # If the sub-account doesn't exist for this main account, add a disabled line edit
                     placeholder_line_edit = QLineEdit()
@@ -374,6 +378,22 @@ class BudgetTracker(QMainWindow):
         date = self.date_input.date().toString('dd-MMM-yy')
         expenditure_type = self.category_input.currentText()
         amount = self.amount_input.text()
+        
+        
+        # Validate amount is a valid float
+        try:
+            float_amount = float(amount)
+        except ValueError:
+            # Show error message box
+            QMessageBox.warning(
+                self,
+                "Invalid Input",
+                "Please enter a valid number for the amount.\nExample: 123.45",
+                QMessageBox.Ok
+            )
+            self.amount_input.clear()
+            return
+
 
         # Add transaction to the table
         self.add_transaction(date, expenditure_type, amount)

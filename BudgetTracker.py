@@ -347,7 +347,15 @@ class BudgetTracker(QMainWindow):
             self.tab1_ledger_table.insertRow(row_position)
             self.tab1_ledger_table.setItem(row_position, 0, QTableWidgetItem(query.value(0)))
             self.tab1_ledger_table.setItem(row_position, 1, QTableWidgetItem(query.value(1)))
-            self.tab1_ledger_table.setItem(row_position, 2, QTableWidgetItem(str(f"{query.value(2):.2f}")))
+            
+            # Convert the amount to float before formatting
+            try:
+                amount = float(query.value(2))
+                formatted_amount = f"{amount:.2f}"
+            except (ValueError, TypeError):
+                formatted_amount = str(query.value(2))
+                
+            self.tab1_ledger_table.setItem(row_position, 2, QTableWidgetItem(formatted_amount))
 
         # Reverse the order of the rows to show the most recent at the top
         for row in range(self.tab1_ledger_table.rowCount() // 2):

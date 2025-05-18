@@ -2,9 +2,8 @@ import sys
 import os
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from datetime import datetime
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
-from PyQt5.QtCore import QDate
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QMessageBox, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
+from PyQt5.QtCore import (QDate , Qt)
 import pandas as pd  # Import pandas
 
 class BudgetTracker(QMainWindow):
@@ -176,11 +175,29 @@ class BudgetTracker(QMainWindow):
         # Create a dropdown for months
         self.month_input = QComboBox()
         
-        # Referesh the monthly spending table
-        self.refresh_monthly_spending_table()
-        self.tab3_layout.addWidget(self.month_input, 0, 0)
-        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0, 1, -1)  # Span all columns 
+        # Create a table for totals on the right
+        self.totals_box = QTableWidget()
+        self.totals_box.setColumnCount(2)
+        self.totals_box.setRowCount(3)  # Three rows for Total Expenses, Salary, and Net
+        self.totals_box.setHorizontalHeaderLabels(["Summary", "Amount"])
+        self.totals_box.setItem(0, 0, QTableWidgetItem("Salary"))
+        self.totals_box.setItem(1, 0, QTableWidgetItem("Total Expenses"))
+        self.totals_box.setItem(2, 0, QTableWidgetItem("Total Profit/Loss"))
+        self.totals_box.setFixedWidth(300)  # Adjust width as needed
+        self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)  # Make it read-only
     
+        # Add widgets to the layout
+        self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)  # Month dropdown spans both columns
+        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)  # Left side
+        self.tab3_layout.addWidget(self.totals_box, 1, 1)  # Right side
+
+        # Set column stretch to make spending table larger than totals box
+        self.tab3_layout.setColumnStretch(0, 2)  # Spending table column
+        self.tab3_layout.setColumnStretch(1, 1)  # Totals box column
+    
+        # Refresh the monthly spending table
+        self.refresh_monthly_spending_table()
+
     def refresh_monthly_spending_table(self):
         #Get the list of months from the database
         self.month_list = self.get_month_list()
@@ -462,42 +479,74 @@ class BudgetTracker(QMainWindow):
         selected_month_year = self.month_input.currentText()
 
         try:
-            # Convert the selected month-year string to datetime object
             selected_date = datetime.strptime(selected_month_year, '%b-%Y')
-            # Format the selected date to match the database format 'MMM-YY'
             formatted_selected_date = selected_date.strftime('%b-%y')
 
-            # Prepare the SQL query to sum up spending by category for the selected month
-            query_str = f"""
+            query_str = """
                 SELECT category, SUM(amount) 
                 FROM transactions 
-                WHERE date LIKE '%{formatted_selected_date}' 
+                WHERE date LIKE ?
                 GROUP BY category
             """
             query = QSqlQuery(self.db)
-            if query.exec_(query_str):
-                # Clear the table before inserting new data
+            query.prepare(query_str)
+            query.addBindValue(f'%{formatted_selected_date}')
+            
+            if query.exec_():
                 self.monthly_spending_table.setRowCount(0)
                 row = 0
+                total_expenses = 0
+                salary = 0
+                
                 while query.next():
-                    # Insert new rows into the table for each category
-                    self.monthly_spending_table.insertRow(row)
-                    # Category
-                    self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(query.value(0)))
-                    # Summed amount
-                    self.monthly_spending_table.setItem(
-                        row, 1, QTableWidgetItem(f"{query.value(1):.2f}"))
+                    category = query.value(0)
+                    amount = float(query.value(1))
+                    
+                    # Add to appropriate total
+                    if category == "Salary":
+                        salary = amount
+                        # Insert row with positive amount in green
+                        self.monthly_spending_table.insertRow(row)
+                        self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
+                        amount_item = QTableWidgetItem(f"{amount:.2f}")
+                        amount_item.setForeground(Qt.darkGreen)
+                    else:
+                        total_expenses += amount
+                        # Insert row with negative amount in red
+                        self.monthly_spending_table.insertRow(row)
+                        self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
+                        amount_item = QTableWidgetItem(f"-{amount:.2f}")
+                        amount_item.setForeground(Qt.red)
+                
+                    self.monthly_spending_table.setItem(row, 1, amount_item)
                     row += 1
+                
+                # Update the totals box
+                salary_item = QTableWidgetItem(f"{salary:.2f}")
+                salary_item.setForeground(Qt.darkGreen)
+                self.totals_box.setItem(0, 1, salary_item)
+                
+                expenses_item = QTableWidgetItem(f"-{total_expenses:.2f}")
+                expenses_item.setForeground(Qt.red)
+                self.totals_box.setItem(1, 1, expenses_item)
+                
+                net_amount = salary - total_expenses
+                net_item = QTableWidgetItem(f"{net_amount:.2f}")
+                net_item.setForeground(Qt.darkGreen if net_amount >= 0 else Qt.red)
+                self.totals_box.setItem(2, 1, net_item)
+                
             else:
-                error = query.lastError().text()
-                # Handle any errors appropriately
+                QMessageBox.warning(self, "Query Error", query.lastError().text())
+        
         except ValueError as e:
             if "time data '' does not match format '%b-%Y'" in str(e):
                 self.monthly_spending_table.setRowCount(0)
+                self.totals_box.setItem(0, 1, QTableWidgetItem("0.00"))
+                self.totals_box.setItem(1, 1, QTableWidgetItem("0.00"))
+                self.totals_box.setItem(2, 1, QTableWidgetItem("0.00"))
             else:
-                # Handle other failures in table handling
-                print(f"Updating monthly spending table failed: {e}")
-            
+                QMessageBox.warning(self, "Error", str(e))
+
     def read_and_update_database(self, file_path):
         # Read the Excel file into a pandas DataFrame
         df = pd.read_excel(file_path)

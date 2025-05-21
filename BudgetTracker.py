@@ -2,80 +2,78 @@ import sys
 import os
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from datetime import datetime
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QMessageBox, QWidget, QGridLayout, QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QAction, QFileDialog)
-from PyQt5.QtCore import (QDate , Qt)
-import pandas as pd  # Import pandas
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTabWidget, QMessageBox, QWidget, QGridLayout,
+    QDateEdit, QComboBox, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
+    QAction, QFileDialog
+)
+from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtGui import QDoubleValidator
+import pandas as pd
 
 class BudgetTracker(QMainWindow):
+    """Main window for the Budget Tracker application."""
+
+    CATEGORY_LIST = [
+        "Salary", "Rent", "Karate", "Broadband", "Phone",
+        "Electricity", "Water", "Sam", "Food", "Eating out",
+        "Sid", "Divs", "Car", "Remit", "Insurance", "Lotto",
+        "Electronix", "Medical", "Laundry", "Trip", "General"
+    ]
+    MAIN_ACCOUNTS = ["Account1", "Account2", "Account3"]
+    SUB_ACCOUNTS = {
+        "Account1": ["Checking", "Savings", "Saver", "Kiwi Saver"],
+        "Account2": ["Checking", "Savings", "Saver", "Kiwi Saver"],
+        "Account3": ["Checking", "Savings"]
+    }
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Budget Tracker 2.0")
         self.setGeometry(100, 100, 800, 600)
 
-        # Create a tab widget
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
-        
-        # Create the first tab for item entry and display
+
         self.create_transaction_entry_tab()
-        
-        # Create the second tab for accounting details
         self.create_account_details_tab()
 
         if not self.initialize_db():
             print("Failed to initialize the databases")
             return
-        
-        # Call this method after initializing the database and setting up the UI components
+
         self.load_latest_accounting_details()
-
-        # Create the third tab for monthly spending
         self.create_monthly_spending_tab()
-
-        # Refresh the table view in Tab 1 (transaction entry) to show the latest transactions
         self.refresh_ledger_table()
-
-        # Create the fourth tab for Excel file input
         self.import_excel_tab()
         self.setup_menu()
-        
-    def setup_menu(self): 
-        exit_action = QAction("Exit", self) 
-        exit_action.triggered.connect(self.close) 
+
+    def setup_menu(self):
+        """Setup the application menu."""
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
         self.menuBar().addAction(exit_action)
-        
+
     def create_transaction_entry_tab(self):
-        # Create the first tab for item entry and display
+        """Create the tab for entering and displaying transactions."""
         self.tab1 = QWidget()
         self.tabs.addTab(self.tab1, "Item Entry")
-
-        # Layout for the first tab
         self.tab1_layout = QGridLayout(self.tab1)
 
-        # Create input fields for date, category, and amount
         self.date_input = QDateEdit(calendarPopup=True)
         self.date_input.setDate(QDate.currentDate())
         self.date_input.setDisplayFormat('dd-MMM-yy')
 
-        # Create a dropdown for categories
         self.category_input = QComboBox()
-        category_list = [
-            "Salary", "Rent", "Karate", "Broadband", "Phone",
-            "Electricity", "Water", "Sam", "Food", "Eating out",
-            "Sid", "Divs", "Car", "Remit", "Insurance", "Lotto",
-            "Electronix", "Medical", "Laundry", "Trip", "General"
-        ]
-        self.category_input.addItems(category_list)
+        self.category_input.addItems(self.CATEGORY_LIST)
 
         self.amount_input = QLineEdit()
-        # Add return key handling to amount input
+        self.amount_input.setValidator(QDoubleValidator(0.00, 1000000.00, 2))
         self.amount_input.returnPressed.connect(self.add_transaction_from_input)
 
-        # Create a submit button
         self.submit_button = QPushButton('Submit')
         self.submit_button.clicked.connect(self.add_transaction_from_input)
 
-        # Add widgets to the left quadrant (0, 0)
         self.tab1_layout.setRowStretch(4, 1)
         self.tab1_layout.setVerticalSpacing(10)
         self.tab1_layout.addWidget(self.date_input, 0, 0)
@@ -83,200 +81,136 @@ class BudgetTracker(QMainWindow):
         self.tab1_layout.addWidget(self.amount_input, 2, 0)
         self.tab1_layout.addWidget(self.submit_button, 3, 0)
 
-        # Create a table to display transactions
         self.tab1_ledger_table = QTableWidget()
         self.tab1_ledger_table.setColumnCount(3)
         self.tab1_ledger_table.setHorizontalHeaderLabels(["Date", "Category", "Amount"])
-        self.tab1_ledger_table.setRowCount(10)  # Set the number of rows you want to be visible
-
-        # Set minimum row heights to ensure all rows are visible
+        self.tab1_ledger_table.setRowCount(10)
         for row in range(10):
-            self.tab1_ledger_table.setRowHeight(row, 20)  # Adjust the row height as needed
-
-        # Add the table to the layout with appropriate row span to accommodate all rows
-        self.tab1_layout.addWidget(self.tab1_ledger_table, 0, 1, 10, 1)  # Span 10 rows instead of 4
+            self.tab1_ledger_table.setRowHeight(row, 20)
+        self.tab1_layout.addWidget(self.tab1_ledger_table, 0, 1, 10, 1)
 
     def create_account_details_tab(self):
-        # Create the second tab for accounting details
+        """Create the tab for managing account balances."""
         self.tab2 = QWidget()
         self.tabs.addTab(self.tab2, "Accounting Details")
-
-        # Layout for the second tab
         self.tab2_layout = QGridLayout(self.tab2)
 
-        # Create UI components for account balances in the top right quadrant
         self.account_balance_widgets = {}
-        self.main_accounts = ["Acoount1", "Acoount2", "Acoount3"]
-        self.sub_accounts = {
-            "Acoount1": ["Checking", "Savings", "Saver", "Kiwi Saver"],
-            "Acoount2": ["Checking", "Savings", "Saver", "Kiwi Saver"],
-            "Acoount3": ["Checking", "Savings"]
-        }
+        unique_sub_accounts = sorted({sub for subs in self.SUB_ACCOUNTS.values() for sub in subs})
 
-        # Determine the unique sub-accounts to set as column headers
-        unique_sub_accounts = set()
-        for accounts in self.sub_accounts.values():
-            unique_sub_accounts.update(accounts)
-        unique_sub_accounts = sorted(list(unique_sub_accounts))
-
-        # Create a QTableWidget
         self.table_widget = QTableWidget()
-        self.table_widget.setRowCount(len(self.main_accounts))  # Set the number of rows
-        self.table_widget.setColumnCount(len(unique_sub_accounts) + 1)  # +1 for the Total column
-        self.table_widget.setHorizontalHeaderLabels(unique_sub_accounts + ["Total"])  # Set column headers
+        self.table_widget.setRowCount(len(self.MAIN_ACCOUNTS))
+        self.table_widget.setColumnCount(len(unique_sub_accounts) + 1)
+        self.table_widget.setHorizontalHeaderLabels(unique_sub_accounts + ["Total"])
 
-        # Initialize the table with row headers and line edits
-        for row, main_account in enumerate(self.main_accounts):
-            # Set row header (account name)
+        for row, main_account in enumerate(self.MAIN_ACCOUNTS):
             self.table_widget.setVerticalHeaderItem(row, QTableWidgetItem(main_account))
-
-            # Initialize line edits for sub-accounts
             for col, sub_account in enumerate(unique_sub_accounts):
-                if sub_account in self.sub_accounts[main_account]:
+                if sub_account in self.SUB_ACCOUNTS[main_account]:
                     sub_account_line_edit = QLineEdit()
                     self.account_balance_widgets[f"{main_account} {sub_account}"] = sub_account_line_edit
                     self.table_widget.setCellWidget(row, col, sub_account_line_edit)
                     sub_account_line_edit.textChanged.connect(self.compute_total)
-                    # Add return key handling
                     sub_account_line_edit.returnPressed.connect(self.save_accounting_details)
                 else:
-                    # If the sub-account doesn't exist for this main account, add a disabled line edit
                     placeholder_line_edit = QLineEdit()
                     placeholder_line_edit.setDisabled(True)
                     self.table_widget.setCellWidget(row, col, placeholder_line_edit)
-
-            # Initialize the total balance line edit
             total_balance_line_edit = QLineEdit("Total")
             total_balance_line_edit.setReadOnly(True)
             self.account_balance_widgets[f"{main_account} Total"] = total_balance_line_edit
             self.table_widget.setCellWidget(row, len(unique_sub_accounts), total_balance_line_edit)
 
-        # Add the table widget to the layout
-        self.tab2_layout.addWidget(self.table_widget, 0, 0, 1, -1)  # Span all columns
-
-        # Add the update button below the table
+        self.tab2_layout.addWidget(self.table_widget, 0, 0, 1, -1)
         update_button = QPushButton("Update")
-        self.tab2_layout.addWidget(update_button, 1, 0, 1, -1)  # Span all columns
+        self.tab2_layout.addWidget(update_button, 1, 0, 1, -1)
         update_button.clicked.connect(self.save_accounting_details)
 
     def create_monthly_spending_tab(self):
-        # Create the third tab for monthly accounts
+        """Create the tab for monthly spending summary."""
         self.tab3 = QWidget()
         self.tabs.addTab(self.tab3, "Monthly Accounts")
-
-        # Layout for the third tab
         self.tab3_layout = QGridLayout(self.tab3)
-               
-        # Create a table to display monthly spending
+
         self.monthly_spending_table = QTableWidget()
-        self.monthly_spending_table.setColumnCount(2)  # For Category and Amount
+        self.monthly_spending_table.setColumnCount(2)
         self.monthly_spending_table.setHorizontalHeaderLabels(["Category", "Amount"])
 
-        # Create a dropdown for months
         self.month_input = QComboBox()
-        
-        # Create a table for totals on the right
+        self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
+
         self.totals_box = QTableWidget()
         self.totals_box.setColumnCount(2)
-        self.totals_box.setRowCount(3)  # Three rows for Total Expenses, Salary, and Net
+        self.totals_box.setRowCount(3)
         self.totals_box.setHorizontalHeaderLabels(["Summary", "Amount"])
         self.totals_box.setItem(0, 0, QTableWidgetItem("Salary"))
         self.totals_box.setItem(1, 0, QTableWidgetItem("Total Expenses"))
         self.totals_box.setItem(2, 0, QTableWidgetItem("Total Profit/Loss"))
-        self.totals_box.setFixedWidth(300)  # Adjust width as needed
-        self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)  # Make it read-only
-    
-        # Add widgets to the layout
-        self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)  # Month dropdown spans both columns
-        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)  # Left side
-        self.tab3_layout.addWidget(self.totals_box, 1, 1)  # Right side
+        self.totals_box.setFixedWidth(300)
+        self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        # Set column stretch to make spending table larger than totals box
-        self.tab3_layout.setColumnStretch(0, 2)  # Spending table column
-        self.tab3_layout.setColumnStretch(1, 1)  # Totals box column
-    
-        # Refresh the monthly spending table
+        self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)
+        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)
+        self.tab3_layout.addWidget(self.totals_box, 1, 1)
+        self.tab3_layout.setColumnStretch(0, 2)
+        self.tab3_layout.setColumnStretch(1, 1)
         self.refresh_monthly_spending_table()
 
     def refresh_monthly_spending_table(self):
-        #Get the list of months from the database
+        """Refresh the list of months in the dropdown."""
         self.month_list = self.get_month_list()
         self.month_input.clear()
         self.month_input.addItems(self.month_list)
 
-        # Connect the month dropdown selection change to the update function if month_input is not empty
-        if self.month_input.count() > 0:
-            self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
-        
     def import_excel_tab(self):
-        # Create the fourth tab for Excel file input
+        """Create the tab for importing Excel files."""
         self.tab4 = QWidget()
         self.tabs.addTab(self.tab4, "Excel Input")
-
-        # Layout for the fourth tab
         self.tab4_layout = QGridLayout(self.tab4)
 
-        # Create a button for selecting an Excel file
         self.select_file_button = QPushButton('Select Excel File')
         self.select_file_button.clicked.connect(self.open_file_dialog)
         self.tab4_layout.addWidget(self.select_file_button, 0, 0)
-        # Create a button to clear transactions
+
         self.clear_transactions_button = QPushButton('Clear Transactions')
         self.clear_transactions_button.clicked.connect(self.clear_transactions)
         self.tab4_layout.addWidget(self.clear_transactions_button, 1, 0)
 
     def compute_total(self):
-        # Iterate through each main account
-        for main_account in self.main_accounts:
+        """Compute and update the total for each main account."""
+        for main_account in self.MAIN_ACCOUNTS:
             total = 0
-            # Sum the values of each sub-account line edit
-            for sub_account in self.sub_accounts[main_account]:
+            for sub_account in self.SUB_ACCOUNTS[main_account]:
                 line_edit = self.account_balance_widgets[f"{main_account} {sub_account}"]
                 value = line_edit.text()
-                # Convert the value to a float and add to the total
                 try:
                     total += float(value)
                 except ValueError:
-                    # If the value is not a number, ignore it
                     continue
-            # Update the corresponding total balance line edit
             total_line_edit = self.account_balance_widgets[f"{main_account} Total"]
             total_line_edit.setText(str(total))
 
     def initialize_db(self):
+        """Initialize the SQLite database and tables."""
         db_name = 'budget_tracker.db'
         db_path = os.path.join(os.path.dirname(__file__), db_name)
-
-        # Check if the database file exists 
-        if not os.path.isfile(db_path): 
+        if not os.path.isfile(db_path):
             print(f"Database file {db_path} does not exist. Creating a new one.")
-            
-        # Ensure the directory exists
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-                  
-        # Connect to the SQLite database
         self.db = QSqlDatabase.addDatabase('QSQLITE')
         self.db.setDatabaseName(db_path)
-
-        # Open the connection
         if not self.db.open():
             print("Error: ", self.db.lastError().text())
             return False
-
-        # Create a QSqlQuery object to execute SQL statements
         query = QSqlQuery()
-
-        # Create a table if it doesn't exist
         query.exec_("""
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
                 date TEXT NOT NULL,
                 category TEXT NOT NULL,
                 amount REAL NOT NULL
-        )
+            )
         """)
-
-        # Create a table for accounting details if it doesn't exist
         query.exec_("""
             CREATE TABLE IF NOT EXISTS accounting_details (
                 id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
@@ -292,16 +226,13 @@ class BudgetTracker(QMainWindow):
         return True
 
     def load_latest_accounting_details(self):
-        # Check if the database connection is open
+        """Load the latest account balances from the database."""
         if not self.db.isOpen():
             if not self.db.open():
                 print("Error: ", self.db.lastError().text())
                 return
-
         query = QSqlQuery()
-
-        # Fetch the latest accounting details for each main account
-        for main_account in self.main_accounts:
+        for main_account in self.MAIN_ACCOUNTS:
             query.prepare("""
                 SELECT checking, savings, saver, kiwi_saver, total
                 FROM accounting_details
@@ -311,43 +242,32 @@ class BudgetTracker(QMainWindow):
             """)
             query.bindValue(":account_name", main_account)
             if query.exec_() and query.next():
-                # Set the values of the line edits to the fetched data
                 self.account_balance_widgets[f"{main_account} Checking"].setText(str(query.value(0)))
                 self.account_balance_widgets[f"{main_account} Savings"].setText(str(query.value(1)))
-                
-                # Only set "Saver" and "Kiwi Saver" if they exist for the account
-                if "Saver" in self.sub_accounts[main_account]:
+                if "Saver" in self.SUB_ACCOUNTS[main_account]:
                     self.account_balance_widgets[f"{main_account} Saver"].setText(str(query.value(2)))
-                if "Kiwi Saver" in self.sub_accounts[main_account]:
+                if "Kiwi Saver" in self.SUB_ACCOUNTS[main_account]:
                     self.account_balance_widgets[f"{main_account} Kiwi Saver"].setText(str(query.value(3)))
-                
-                # Set the total balance
                 self.account_balance_widgets[f"{main_account} Total"].setText(str(query.value(4)))
             else:
                 print(f"No accounting details found for {main_account} or failed to fetch data.")
 
     def save_accounting_details(self):
+        """Save the current account balances to the database."""
         query = QSqlQuery()
-        for main_account in self.main_accounts:
-            # Initialize a dictionary to hold the account data
+        for main_account in self.MAIN_ACCOUNTS:
             data = {
                 'account_name': main_account,
-                # Use Python's datetime.now() to get the current local date and time
                 'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'total': self.account_balance_widgets[f"{main_account} Total"].text()
             }
-
-            # Iterate over each sub-account and safely get the text or set a default value
             for sub_account in ["Checking", "Savings", "Saver", "Kiwi Saver"]:
                 line_edit = self.account_balance_widgets.get(f"{main_account} {sub_account}")
                 data[sub_account.lower()] = line_edit.text() if line_edit is not None else '0'
-
-            # Insert the data into the database
             query.prepare("""
                 INSERT INTO accounting_details (account_name, date, checking, savings, saver, kiwi_saver, total)
                 VALUES (:account_name, :date, :checking, :savings, :saver, :kiwi_saver, :total)
             """)
-            # Bind the values for the INSERT
             for key, value in data.items():
                 query.bindValue(f":{key}", value)
             if not query.exec_():
@@ -356,29 +276,20 @@ class BudgetTracker(QMainWindow):
                 print(f"Accounting details for {main_account} updated successfully.")
 
     def refresh_ledger_table(self):
-        # Clear the existing table content
+        """Refresh the transaction ledger table."""
         self.tab1_ledger_table.setRowCount(0)
-
-        # Execute a query to fetch the latest 10 data entries, ordered by id descending
         query = QSqlQuery("SELECT date, category, amount FROM transactions ORDER BY id DESC LIMIT 10")
-
-        # Populate the table with the data
         while query.next():
             row_position = self.tab1_ledger_table.rowCount()
             self.tab1_ledger_table.insertRow(row_position)
             self.tab1_ledger_table.setItem(row_position, 0, QTableWidgetItem(query.value(0)))
             self.tab1_ledger_table.setItem(row_position, 1, QTableWidgetItem(query.value(1)))
-            
-            # Convert the amount to float before formatting
             try:
                 amount = float(query.value(2))
                 formatted_amount = f"{amount:.2f}"
             except (ValueError, TypeError):
                 formatted_amount = str(query.value(2))
-                
             self.tab1_ledger_table.setItem(row_position, 2, QTableWidgetItem(formatted_amount))
-
-        # Reverse the order of the rows to show the most recent at the top
         for row in range(self.tab1_ledger_table.rowCount() // 2):
             for col in range(self.tab1_ledger_table.columnCount()):
                 top_item = self.tab1_ledger_table.takeItem(row, col)
@@ -386,22 +297,16 @@ class BudgetTracker(QMainWindow):
                 bottom_item = self.tab1_ledger_table.takeItem(bottom_row, col)
                 self.tab1_ledger_table.setItem(row, col, bottom_item)
                 self.tab1_ledger_table.setItem(bottom_row, col, top_item)
-
-        # Optionally, adjust column widths for better readability
         self.tab1_ledger_table.resizeColumnsToContents()
 
     def add_transaction_from_input(self):
-        # Get input values
+        """Add a transaction from the input fields."""
         date = self.date_input.date().toString('dd-MMM-yy')
         expenditure_type = self.category_input.currentText()
         amount = self.amount_input.text()
-        
-        
-        # Validate amount is a valid float
         try:
-            float_amount = float(amount)
+            float(amount)
         except ValueError:
-            # Show error message box
             QMessageBox.warning(
                 self,
                 "Invalid Input",
@@ -410,78 +315,52 @@ class BudgetTracker(QMainWindow):
             )
             self.amount_input.clear()
             return
-
-
-        # Add transaction to the table
         self.add_transaction(date, expenditure_type, amount)
-
-        # Clear input fields
         self.amount_input.clear()
-
-        # Refresh the table view to show the latest transactions
         self.refresh_ledger_table()
 
     def add_transaction(self, date, category, amount):
-        # Create a QSqlQuery object
+        """Insert a transaction into the database."""
         query = QSqlQuery()
-
-        # Prepare the insert SQL statement
         query.prepare("INSERT INTO transactions (date, category, amount) VALUES (?, ?, ?)")
-
-        # Bind the values to the placeholders
         query.addBindValue(date)
         query.addBindValue(category)
         query.addBindValue(amount)
-
-        # Execute the query
         if not query.exec_():
             print("Error: ", query.lastError().text())
 
-    # Add the new methods for the third tab functionality here
     def get_month_list(self):
-
+        """Get a list of months with transactions."""
         if not self.db.isOpen():
             if not self.db.open():
                 print("Error: ", self.db.lastError().text())
                 return []
-
         month_list = []
         query = QSqlQuery(self.db)
-
-        # Execute a simple query to fetch all dates
         if query.exec_("SELECT DISTINCT date FROM transactions"):
             while query.next():
-                # Fetch the date as a string from the database
                 date_str = query.value(0)
-                # Convert the date string to a datetime object
                 try:
                     date_obj = datetime.strptime(date_str, '%d-%b-%y')
-                    # Format the date as 'YYYY-MM' and add to the list if not already present
                     month_year_str = date_obj.strftime('%Y-%m')
                     if month_year_str not in month_list:
                         month_list.append(month_year_str)
                 except ValueError:
                     print(f"Date conversion error: {date_str}")
-
         else:
             print("Query failed: ", query.lastError().text())
-        
-        # At the end of your get_month_list function, before returning the list
         formatted_month_list = []
         for month_year_str in month_list:
-            # Convert 'YYYY-MM' to 'MMM-YYYY'
             date_obj = datetime.strptime(month_year_str, '%Y-%m')
             formatted_month_list.append(date_obj.strftime('%b-%Y'))
-
         return formatted_month_list
 
     def update_monthly_spending_table(self):
+        """Update the monthly spending summary for the selected month."""
         selected_month_year = self.month_input.currentText()
-
         try:
             selected_date = datetime.strptime(selected_month_year, '%b-%Y')
             formatted_selected_date = selected_date.strftime('%b-%y')
-
             query_str = """
                 SELECT category, SUM(amount) 
                 FROM transactions 
@@ -491,53 +370,40 @@ class BudgetTracker(QMainWindow):
             query = QSqlQuery(self.db)
             query.prepare(query_str)
             query.addBindValue(f'%{formatted_selected_date}')
-            
             if query.exec_():
                 self.monthly_spending_table.setRowCount(0)
                 row = 0
                 total_expenses = 0
                 salary = 0
-                
                 while query.next():
                     category = query.value(0)
                     amount = float(query.value(1))
-                    
-                    # Add to appropriate total
                     if category == "Salary":
                         salary = amount
-                        # Insert row with positive amount in green
                         self.monthly_spending_table.insertRow(row)
                         self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
                         amount_item = QTableWidgetItem(f"{amount:.2f}")
                         amount_item.setForeground(Qt.darkGreen)
                     else:
                         total_expenses += amount
-                        # Insert row with negative amount in red
                         self.monthly_spending_table.insertRow(row)
                         self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
                         amount_item = QTableWidgetItem(f"-{amount:.2f}")
                         amount_item.setForeground(Qt.red)
-                
                     self.monthly_spending_table.setItem(row, 1, amount_item)
                     row += 1
-                
-                # Update the totals box
                 salary_item = QTableWidgetItem(f"{salary:.2f}")
                 salary_item.setForeground(Qt.darkGreen)
                 self.totals_box.setItem(0, 1, salary_item)
-                
                 expenses_item = QTableWidgetItem(f"-{total_expenses:.2f}")
                 expenses_item.setForeground(Qt.red)
                 self.totals_box.setItem(1, 1, expenses_item)
-                
                 net_amount = salary - total_expenses
                 net_item = QTableWidgetItem(f"{net_amount:.2f}")
                 net_item.setForeground(Qt.darkGreen if net_amount >= 0 else Qt.red)
                 self.totals_box.setItem(2, 1, net_item)
-                
             else:
                 QMessageBox.warning(self, "Query Error", query.lastError().text())
-        
         except ValueError as e:
             if "time data '' does not match format '%b-%Y'" in str(e):
                 self.monthly_spending_table.setRowCount(0)
@@ -548,70 +414,52 @@ class BudgetTracker(QMainWindow):
                 QMessageBox.warning(self, "Error", str(e))
 
     def read_and_update_database(self, file_path):
-        # Read the Excel file into a pandas DataFrame
+        """Read an Excel file and update the database with its contents."""
         df = pd.read_excel(file_path)
-        
-        # Replace NaN values with 0 for expenditures not made in certain months
         df.fillna(0, inplace=True)
-        
-        # Check if the database connection is open
         if not self.db.isOpen():
             if not self.db.open():
                 print("Error: ", self.db.lastError().text())
                 return []
-        
-        # Loop through each month's column in DataFrame starting from index 1 since index 0 is categories
         for month_col in df.columns[1:]:
-            # Extract the month and year from the column name
             month_year = datetime.strptime(month_col, '%b-%y')
-            # Assume the first day of the month for the date
             date_col = month_year.strftime('%d-%b-%y')
-
-            # Create a temporary DataFrame with 'Category', 'Amount', and 'Date' columns
             temp_df = pd.DataFrame({
                 'category': df.iloc[:, 0],
-                'amount': df[month_col].abs(),  # Convert negative amounts to positive
+                'amount': df[month_col].abs(),
                 'date': date_col
             })
-            
-            # Add each transaction to the database 
-            for index, row in temp_df.iterrows(): 
+            for _, row in temp_df.iterrows():
                 self.add_transaction(row['date'], row['category'], row['amount'])
-
-        # Show a message box indicating the import is complete
         QMessageBox.information(self, "Import Complete", "The spreadsheet has been successfully imported.")
-        
-        # Refresh the table view to show the latest transactions
         self.refresh_ledger_table()
-        # Refresh the monthly spending table using latest import
         self.refresh_monthly_spending_table()
 
     def open_file_dialog(self):
+        """Open a file dialog to select an Excel file."""
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
         if file_name:
-            # Call the function to handle the file and update the database
             self.read_and_update_database(file_name)
 
     def clear_transactions(self):
+        """Clear all transactions from the database."""
         query = QSqlQuery()
         if query.exec_("DELETE FROM transactions"):
-            # Show a message box indicating transactions have been cleared
             QMessageBox.information(self, "Transactions Cleared", "Transactions in database has been cleared.")
-            self.refresh_ledger_table()  # Refresh the table view to reflect the changes
+            self.refresh_ledger_table()
             self.refresh_monthly_spending_table()
         else:
             print("Error: ", query.lastError().text())
 
-    def closeEvent(self, event): 
-        # Close the database connection before exiting 
-        if hasattr(self, 'db') and self.db.isOpen(): 
-            self.db.close() 
+    def closeEvent(self, event):
+        """Handle the close event to ensure the database is closed."""
+        if hasattr(self, 'db') and self.db.isOpen():
+            self.db.close()
             print("Database connection closed.")
-            
         event.accept()
-        
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = BudgetTracker()

@@ -263,7 +263,8 @@ class BudgetTracker(QMainWindow):
             }
             for sub_account in ["Checking", "Savings", "Saver", "Kiwi Saver"]:
                 line_edit = self.account_balance_widgets.get(f"{main_account} {sub_account}")
-                data[sub_account.lower()] = line_edit.text() if line_edit is not None else '0'
+                key = sub_account.lower().replace(" ", "_")  # <-- Add this line
+                data[key] = line_edit.text() if line_edit is not None else '0'
             query.prepare("""
                 INSERT INTO accounting_details (account_name, date, checking, savings, saver, kiwi_saver, total)
                 VALUES (:account_name, :date, :checking, :savings, :saver, :kiwi_saver, :total)

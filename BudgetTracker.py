@@ -10,6 +10,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate, Qt
 from PyQt5.QtGui import QDoubleValidator
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+class MplCanvas(FigureCanvas):
+    """Matplotlib canvas widget to embed in PyQt5 applications."""
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig, self.axes = plt.subplots(figsize=(width, height), dpi=dpi)
+        super(MplCanvas, self).__init__(fig)
+        self.setParent(parent)
 
 class BudgetTracker(QMainWindow):
     """Main window for the Budget Tracker application."""
@@ -149,11 +158,16 @@ class BudgetTracker(QMainWindow):
         self.totals_box.setFixedWidth(300)
         self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)
 
+        # Add Matplotlib chart
+        self.monthly_spending_chart = MplCanvas(self, width=5, height=4, dpi=100)
+
         self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)
         self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)
         self.tab3_layout.addWidget(self.totals_box, 1, 1)
+        self.tab3_layout.addWidget(self.monthly_spending_chart, 2, 0, 1, 2)  # Add chart to layout, spanning both columns
         self.tab3_layout.setColumnStretch(0, 2)
         self.tab3_layout.setColumnStretch(1, 1)
+        self.tab3_layout.setRowStretch(2, 1)  # Allow the chart row to expand
         self.refresh_monthly_spending_table()
 
     def refresh_monthly_spending_table(self):
@@ -371,6 +385,10 @@ class BudgetTracker(QMainWindow):
             query = QSqlQuery(self.db)
             query.prepare(query_str)
             query.addBindValue(f'%{formatted_selected_date}')
+
+            chart_categories = []
+            chart_amounts = []
+
             if query.exec_():
                 self.monthly_spending_table.setRowCount(0)
                 row = 0
@@ -391,6 +409,8 @@ class BudgetTracker(QMainWindow):
                         self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
                         amount_item = QTableWidgetItem(f"-{amount:.2f}")
                         amount_item.setForeground(Qt.red)
+                        chart_categories.append(category)  # Add to chart data
+                        chart_amounts.append(amount)       # Add to chart data
                     self.monthly_spending_table.setItem(row, 1, amount_item)
                     row += 1
                 salary_item = QTableWidgetItem(f"{salary:.2f}")
@@ -403,6 +423,17 @@ class BudgetTracker(QMainWindow):
                 net_item = QTableWidgetItem(f"{net_amount:.2f}")
                 net_item.setForeground(Qt.darkGreen if net_amount >= 0 else Qt.red)
                 self.totals_box.setItem(2, 1, net_item)
+
+                # Update chart
+                self.monthly_spending_chart.axes.clear()
+                if chart_categories:  # Check if there is data to plot
+                    self.monthly_spending_chart.axes.bar(chart_categories, chart_amounts)
+                    self.monthly_spending_chart.axes.set_ylabel('Amount')
+                    self.monthly_spending_chart.axes.set_title('Monthly Expenses (Excluding Salary)')
+                    plt.setp(self.monthly_spending_chart.axes.get_xticklabels(), rotation=45, ha="right")  # Rotate labels
+                    self.monthly_spending_chart.figure.tight_layout()  # Adjust layout
+                self.monthly_spending_chart.draw()
+
             else:
                 QMessageBox.warning(self, "Query Error", query.lastError().text())
         except ValueError as e:
@@ -411,6 +442,9 @@ class BudgetTracker(QMainWindow):
                 self.totals_box.setItem(0, 1, QTableWidgetItem("0.00"))
                 self.totals_box.setItem(1, 1, QTableWidgetItem("0.00"))
                 self.totals_box.setItem(2, 1, QTableWidgetItem("0.00"))
+                # Clear chart if no data
+                self.monthly_spending_chart.axes.clear()
+                self.monthly_spending_chart.draw()
             else:
                 QMessageBox.warning(self, "Error", str(e))
 

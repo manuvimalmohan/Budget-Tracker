@@ -442,114 +442,115 @@ class BudgetTracker(QMainWindow):
         self.refresh_monthly_spending_table()
 
     def refresh_monthly_spending_table(self):
-        """Refresh the list of months in the dropdown."""
-        self.month_list = self.get_month_list()
+        """Refresh the list of months in the dropdown and ensure it is sorted."""
+        self.month_list = sorted(self.get_month_list(), key=lambda x: datetime.strptime(x, '%b-%Y'))
         self.month_input.clear()
         self.month_input.addItems(self.month_list)
 
     def get_month_list(self):
-        """Get a list of months with transactions."""
+        """Get a sorted list of months with transactions as '%b-%Y'."""
         if not self.db.isOpen():
             if not self.db.open():
                 print("Error: ", self.db.lastError().text())
                 return []
-        month_list = []
+        months = set()
         query = QSqlQuery(self.db)
-        if query.exec_("SELECT DISTINCT date FROM transactions"):
+        if query.exec_("SELECT date FROM transactions"):
             while query.next():
                 date_str = query.value(0)
                 try:
                     date_obj = datetime.strptime(date_str, '%d-%b-%y')
-                    month_year_str = date_obj.strftime('%Y-%m')
-                    if month_year_str not in month_list:
-                        month_list.append(month_year_str)
-                except ValueError:
-                    print(f"Date conversion error: {date_str}")
-        else:
-            print("Query failed: ", query.lastError().text())
-        formatted_month_list = []
-        for month_year_str in month_list:
-            date_obj = datetime.strptime(month_year_str, '%Y-%m')
-            formatted_month_list.append(date_obj.strftime('%b-%Y'))
-        return formatted_month_list
+                    months.add((date_obj.year, date_obj.month))
+                except Exception:
+                    continue
+        # Sort and format
+        sorted_months = sorted(list(months))
+        return [datetime(year, month, 1).strftime('%b-%Y') for year, month in sorted_months]
 
     def update_monthly_spending_table(self):
         """Update the monthly spending summary for the selected month."""
         selected_month_year = self.month_input.currentText()
         try:
             selected_date = datetime.strptime(selected_month_year, '%b-%Y')
-            formatted_selected_date = selected_date.strftime('%b-%y')
-            query_str = """
-                SELECT category, SUM(amount) 
-                FROM transactions 
-                WHERE date LIKE ?
-                GROUP BY category
-            """
+            year = selected_date.year
+            month = selected_date.month
+            # Fetch all transactions for the selected month
             query = QSqlQuery(self.db)
-            query.prepare(query_str)
-            query.addBindValue(f'%{formatted_selected_date}')
-
-            chart_categories = []
-            chart_amounts = []
-
-            if query.exec_():
-                self.monthly_spending_table.setRowCount(0)
-                row = 0
-                total_expenses = 0
-                salary = 0
-                while query.next():
-                    category = query.value(0)
-                    amount = float(query.value(1))
-                    if category == "Salary":
-                        salary = amount
-                        self.monthly_spending_table.insertRow(row)
-                        self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
-                        amount_item = QTableWidgetItem(f"{amount:.2f}")
-                        amount_item.setForeground(Qt.darkGreen)
-                    else:
-                        total_expenses += amount
-                        self.monthly_spending_table.insertRow(row)
-                        self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(category))
-                        amount_item = QTableWidgetItem(f"-{amount:.2f}")
-                        amount_item.setForeground(Qt.red)
-                        chart_categories.append(category)  # Add to chart data
-                        chart_amounts.append(amount)       # Add to chart data
-                    self.monthly_spending_table.setItem(row, 1, amount_item)
-                    row += 1
-                salary_item = QTableWidgetItem(f"{salary:.2f}")
-                salary_item.setForeground(Qt.darkGreen)
-                self.totals_box.setItem(0, 1, salary_item)
-                expenses_item = QTableWidgetItem(f"-{total_expenses:.2f}")
-                expenses_item.setForeground(Qt.red)
-                self.totals_box.setItem(1, 1, expenses_item)
-                net_amount = salary - total_expenses
-                net_item = QTableWidgetItem(f"{net_amount:.2f}")
-                net_item.setForeground(Qt.darkGreen if net_amount >= 0 else Qt.red)
-                self.totals_box.setItem(2, 1, net_item)
-
-                # Update chart
-                self.monthly_spending_chart.axes.clear()
-                if chart_categories:  # Check if there is data to plot
-                    self.monthly_spending_chart.axes.bar(chart_categories, chart_amounts)
-                    self.monthly_spending_chart.axes.set_ylabel('Amount')
-                    self.monthly_spending_chart.axes.set_title('Monthly Expenses (Excluding Salary)')
-                    plt.setp(self.monthly_spending_chart.axes.get_xticklabels(), rotation=45, ha="right")  # Rotate labels
-                    self.monthly_spending_chart.figure.tight_layout()  # Adjust layout
-                self.monthly_spending_chart.draw()
-
-            else:
+            if not query.exec_("SELECT date, category, amount FROM transactions"):
                 QMessageBox.warning(self, "Query Error", query.lastError().text())
-        except ValueError as e:
-            if "time data '' does not match format '%b-%Y'" in str(e):
-                self.monthly_spending_table.setRowCount(0)
-                self.totals_box.setItem(0, 1, QTableWidgetItem("0.00"))
-                self.totals_box.setItem(1, 1, QTableWidgetItem("0.00"))
-                self.totals_box.setItem(2, 1, QTableWidgetItem("0.00"))
-                # Clear chart if no data
-                self.monthly_spending_chart.axes.clear()
-                self.monthly_spending_chart.draw()
-            else:
-                QMessageBox.warning(self, "Error", str(e))
+                return
+            # Aggregate
+            category_totals = {}
+            salary = 0
+            for_chart = {}
+            while query.next():
+                date_str = query.value(0)
+                category = query.value(1)
+                amount_str = query.value(2)
+                try:
+                    amount = float(amount_str)
+                except (ValueError, TypeError):
+                    continue
+                try:
+                    date_obj = datetime.strptime(date_str, '%d-%b-%y')
+                except Exception:
+                    continue
+                if date_obj.year == year and date_obj.month == month:
+                    if category == 'Salary':
+                        salary += amount
+                    else:
+                        category_totals[category] = category_totals.get(category, 0) + amount
+                        for_chart[category] = for_chart.get(category, 0) + amount
+            # Fill table
+            self.monthly_spending_table.setRowCount(0)
+            row = 0
+            # Salary row
+            if salary > 0:
+                self.monthly_spending_table.insertRow(row)
+                self.monthly_spending_table.setItem(row, 0, QTableWidgetItem('Salary'))
+                item = QTableWidgetItem(f"{salary:.2f}")
+                item.setForeground(Qt.darkGreen)
+                self.monthly_spending_table.setItem(row, 1, item)
+                row += 1
+            total_expenses = 0
+            for cat, amt in category_totals.items():
+                self.monthly_spending_table.insertRow(row)
+                self.monthly_spending_table.setItem(row, 0, QTableWidgetItem(cat))
+                item = QTableWidgetItem(f"-{amt:.2f}")
+                item.setForeground(Qt.red)
+                self.monthly_spending_table.setItem(row, 1, item)
+                total_expenses += amt
+                row += 1
+            # Summary
+            salary_item = QTableWidgetItem(f"{salary:.2f}")
+            salary_item.setForeground(Qt.darkGreen)
+            self.totals_box.setItem(0, 1, salary_item)
+            expenses_item = QTableWidgetItem(f"-{total_expenses:.2f}")
+            expenses_item.setForeground(Qt.red)
+            self.totals_box.setItem(1, 1, expenses_item)
+            net_amount = salary - total_expenses
+            net_item = QTableWidgetItem(f"{net_amount:.2f}")
+            net_item.setForeground(Qt.darkGreen if net_amount >= 0 else Qt.red)
+            self.totals_box.setItem(2, 1, net_item)
+            # Bar chart
+            self.monthly_spending_chart.axes.clear()
+            if for_chart:
+                cats = list(for_chart.keys())
+                amts = list(for_chart.values())
+                self.monthly_spending_chart.axes.bar(cats, amts, color='red')
+                self.monthly_spending_chart.axes.set_ylabel('Amount')
+                self.monthly_spending_chart.axes.set_title('Monthly Expenses (Excluding Salary)')
+                plt.setp(self.monthly_spending_chart.axes.get_xticklabels(), rotation=45, ha="right")
+                self.monthly_spending_chart.figure.tight_layout()
+            self.monthly_spending_chart.draw()
+        except Exception as e:
+            self.monthly_spending_table.setRowCount(0)
+            self.totals_box.setItem(0, 1, QTableWidgetItem("0.00"))
+            self.totals_box.setItem(1, 1, QTableWidgetItem("0.00"))
+            self.totals_box.setItem(2, 1, QTableWidgetItem("0.00"))
+            self.monthly_spending_chart.axes.clear()
+            self.monthly_spending_chart.draw()
+            QMessageBox.warning(self, "Error", str(e))
 
     def import_excel_tab(self):
         """Create the tab for importing Excel files."""

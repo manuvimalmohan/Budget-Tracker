@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QAction, QFileDialog
 )
 from PyQt5.QtCore import QDate, Qt
-from PyQt5.QtGui import QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator, QFont
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -39,9 +39,17 @@ class BudgetTracker(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Budget Tracker 2.0")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 900, 650)
+
+        self.apply_material_stylesheet()
 
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+        QTabBar::tab {
+            min-width: 200px; /* Increase minimum width */
+            padding: 10px 25px; /* Adjust padding for better visibility */
+        }
+        """)
         self.setCentralWidget(self.tabs)
 
         self.create_transaction_entry_tab()
@@ -56,6 +64,121 @@ class BudgetTracker(QMainWindow):
         self.refresh_ledger_table()
         self.import_excel_tab()
         self.setup_menu()
+
+    def apply_material_stylesheet(self):
+        """Apply a Material Design-inspired dark theme stylesheet."""
+        style_sheet = """
+        QMainWindow {
+            background-color: #263238;
+        }
+        QTabWidget::pane {
+            border-top: 2px solid #37474F;
+            background: #263238;
+        }
+        QTabBar::tab {
+            background: #37474F;
+            color: #B0BEC5;
+            padding: 10px 20px;
+            border: 1px solid #263238;
+            border-bottom: none;
+            font-weight: bold;
+        }
+        QTabBar::tab:selected {
+            background: #263238;
+            color: #03A9F4;
+            border-bottom: 2px solid #03A9F4;
+        }
+        QWidget {
+            background-color: #263238;
+            color: #ECEFF1;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            font-size: 11pt;
+        }
+        QLabel {
+            color: #B0BEC5;
+            font-size: 10pt;
+        }
+        QLineEdit, QComboBox, QDateEdit {
+            background-color: #37474F;
+            color: #ECEFF1;
+            border: 1px solid #455A64;
+            border-bottom: 2px solid #455A64;
+            padding: 8px;
+            font-size: 11pt;
+            border-radius: 4px;
+        }
+        QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
+            border-bottom: 2px solid #03A9F4;
+        }
+        QPushButton {
+            background-color: #03A9F4;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            font-size: 11pt;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: #0288D1;
+        }
+        QPushButton:pressed {
+            background-color: #01579B;
+        }
+        QTableWidget {
+            background-color: #37474F;
+            color: #ECEFF1;
+            gridline-color: #455A64;
+            selection-background-color: #03A9F4;
+            selection-color: #ECEFF1;
+            border: 1px solid #455A64;
+            font-size: 10pt;
+        }
+        QHeaderView::section {
+            background-color: #263238;
+            color: #B0BEC5;
+            padding: 8px;
+            border: 1px solid #455A64;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+        QMenuBar {
+            background-color: #263238;
+            color: #B0BEC5;
+        }
+        QMenuBar::item {
+            background: transparent;
+            padding: 6px 10px;
+        }
+        QMenuBar::item:selected {
+            background: #37474F;
+            color: #03A9F4;
+        }
+        QMenu {
+            background-color: #37474F;
+            color: #ECEFF1;
+            border: 1px solid #455A64;
+        }
+        QMenu::item {
+            padding: 8px 20px;
+        }
+        QMenu::item:selected {
+            background-color: #03A9F4;
+            color: white;
+        }
+        QMessageBox {
+            background-color: #37474F;
+        }
+        QMessageBox QLabel {
+            color: #ECEFF1;
+            font-size: 11pt;
+        }
+        QMessageBox QPushButton {
+            min-width: 80px;
+        }
+        """
+        self.setStyleSheet(style_sheet)
+        QApplication.setFont(QFont('Segoe UI', 10))
 
     def setup_menu(self):
         """Setup the application menu."""
@@ -135,75 +258,6 @@ class BudgetTracker(QMainWindow):
         self.tab2_layout.addWidget(update_button, 1, 0, 1, -1)
         update_button.clicked.connect(self.save_accounting_details)
 
-    def create_monthly_spending_tab(self):
-        """Create the tab for monthly spending summary."""
-        self.tab3 = QWidget()
-        self.tabs.addTab(self.tab3, "Monthly Accounts")
-        self.tab3_layout = QGridLayout(self.tab3)
-
-        self.monthly_spending_table = QTableWidget()
-        self.monthly_spending_table.setColumnCount(2)
-        self.monthly_spending_table.setHorizontalHeaderLabels(["Category", "Amount"])
-
-        self.month_input = QComboBox()
-        self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
-
-        self.totals_box = QTableWidget()
-        self.totals_box.setColumnCount(2)
-        self.totals_box.setRowCount(3)
-        self.totals_box.setHorizontalHeaderLabels(["Summary", "Amount"])
-        self.totals_box.setItem(0, 0, QTableWidgetItem("Salary"))
-        self.totals_box.setItem(1, 0, QTableWidgetItem("Total Expenses"))
-        self.totals_box.setItem(2, 0, QTableWidgetItem("Total Profit/Loss"))
-        self.totals_box.setFixedWidth(300)
-        self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Add Matplotlib chart
-        self.monthly_spending_chart = MplCanvas(self, width=5, height=4, dpi=100)
-
-        self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)
-        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)
-        self.tab3_layout.addWidget(self.totals_box, 1, 1)
-        self.tab3_layout.addWidget(self.monthly_spending_chart, 2, 0, 1, 2)  # Add chart to layout, spanning both columns
-        self.tab3_layout.setColumnStretch(0, 2)
-        self.tab3_layout.setColumnStretch(1, 1)
-        self.tab3_layout.setRowStretch(2, 1)  # Allow the chart row to expand
-        self.refresh_monthly_spending_table()
-
-    def refresh_monthly_spending_table(self):
-        """Refresh the list of months in the dropdown."""
-        self.month_list = self.get_month_list()
-        self.month_input.clear()
-        self.month_input.addItems(self.month_list)
-
-    def import_excel_tab(self):
-        """Create the tab for importing Excel files."""
-        self.tab4 = QWidget()
-        self.tabs.addTab(self.tab4, "Excel Input")
-        self.tab4_layout = QGridLayout(self.tab4)
-
-        self.select_file_button = QPushButton('Select Excel File')
-        self.select_file_button.clicked.connect(self.open_file_dialog)
-        self.tab4_layout.addWidget(self.select_file_button, 0, 0)
-
-        self.clear_transactions_button = QPushButton('Clear Transactions')
-        self.clear_transactions_button.clicked.connect(self.clear_transactions)
-        self.tab4_layout.addWidget(self.clear_transactions_button, 1, 0)
-
-    def compute_total(self):
-        """Compute and update the total for each main account."""
-        for main_account in self.MAIN_ACCOUNTS:
-            total = 0
-            for sub_account in self.SUB_ACCOUNTS[main_account]:
-                line_edit = self.account_balance_widgets[f"{main_account} {sub_account}"]
-                value = line_edit.text()
-                try:
-                    total += float(value)
-                except ValueError:
-                    continue
-            total_line_edit = self.account_balance_widgets[f"{main_account} Total"]
-            total_line_edit.setText(str(total))
-
     def initialize_db(self):
         """Initialize the SQLite database and tables."""
         db_name = 'budget_tracker.db'
@@ -277,7 +331,7 @@ class BudgetTracker(QMainWindow):
             }
             for sub_account in ["Checking", "Savings", "Saver", "Kiwi Saver"]:
                 line_edit = self.account_balance_widgets.get(f"{main_account} {sub_account}")
-                key = sub_account.lower().replace(" ", "_")  # <-- Add this line
+                key = sub_account.lower().replace(" ", "_")
                 data[key] = line_edit.text() if line_edit is not None else '0'
             query.prepare("""
                 INSERT INTO accounting_details (account_name, date, checking, savings, saver, kiwi_saver, total)
@@ -289,6 +343,21 @@ class BudgetTracker(QMainWindow):
                 print("Update error: ", query.lastError().text())
             else:
                 print(f"Accounting details for {main_account} updated successfully.")
+
+    def compute_total(self):
+        """Compute and update the total for each main account."""
+        for main_account in self.MAIN_ACCOUNTS:
+            total = 0
+            for sub_account in self.SUB_ACCOUNTS[main_account]:
+                line_edit = self.account_balance_widgets.get(f"{main_account} {sub_account}")
+                if line_edit:
+                    try:
+                        total += float(line_edit.text())
+                    except ValueError:
+                        continue
+            total_line_edit = self.account_balance_widgets.get(f"{main_account} Total")
+            if total_line_edit:
+                total_line_edit.setText(f"{total:.2f}")
 
     def refresh_ledger_table(self):
         """Refresh the transaction ledger table."""
@@ -305,13 +374,6 @@ class BudgetTracker(QMainWindow):
             except (ValueError, TypeError):
                 formatted_amount = str(query.value(2))
             self.tab1_ledger_table.setItem(row_position, 2, QTableWidgetItem(formatted_amount))
-        for row in range(self.tab1_ledger_table.rowCount() // 2):
-            for col in range(self.tab1_ledger_table.columnCount()):
-                top_item = self.tab1_ledger_table.takeItem(row, col)
-                bottom_row = self.tab1_ledger_table.rowCount() - row - 1
-                bottom_item = self.tab1_ledger_table.takeItem(bottom_row, col)
-                self.tab1_ledger_table.setItem(row, col, bottom_item)
-                self.tab1_ledger_table.setItem(bottom_row, col, top_item)
         self.tab1_ledger_table.resizeColumnsToContents()
 
     def add_transaction_from_input(self):
@@ -343,6 +405,47 @@ class BudgetTracker(QMainWindow):
         query.addBindValue(amount)
         if not query.exec_():
             print("Error: ", query.lastError().text())
+
+    def create_monthly_spending_tab(self):
+        """Create the tab for monthly spending summary."""
+        self.tab3 = QWidget()
+        self.tabs.addTab(self.tab3, "Monthly Accounts")
+        self.tab3_layout = QGridLayout(self.tab3)
+
+        self.monthly_spending_table = QTableWidget()
+        self.monthly_spending_table.setColumnCount(2)
+        self.monthly_spending_table.setHorizontalHeaderLabels(["Category", "Amount"])
+
+        self.month_input = QComboBox()
+        self.month_input.currentIndexChanged.connect(self.update_monthly_spending_table)
+
+        self.totals_box = QTableWidget()
+        self.totals_box.setColumnCount(2)
+        self.totals_box.setRowCount(3)
+        self.totals_box.setHorizontalHeaderLabels(["Summary", "Amount"])
+        self.totals_box.setItem(0, 0, QTableWidgetItem("Salary"))
+        self.totals_box.setItem(1, 0, QTableWidgetItem("Total Expenses"))
+        self.totals_box.setItem(2, 0, QTableWidgetItem("Total Profit/Loss"))
+        self.totals_box.setFixedWidth(300)
+        self.totals_box.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        # Add Matplotlib chart
+        self.monthly_spending_chart = MplCanvas(self, width=5, height=4, dpi=100)
+
+        self.tab3_layout.addWidget(self.month_input, 0, 0, 1, 2)
+        self.tab3_layout.addWidget(self.monthly_spending_table, 1, 0)
+        self.tab3_layout.addWidget(self.totals_box, 1, 1)
+        self.tab3_layout.addWidget(self.monthly_spending_chart, 2, 0, 1, 2)  # Add chart to layout, spanning both columns
+        self.tab3_layout.setColumnStretch(0, 2)
+        self.tab3_layout.setColumnStretch(1, 1)
+        self.tab3_layout.setRowStretch(2, 1)  # Allow the chart row to expand
+        self.refresh_monthly_spending_table()
+
+    def refresh_monthly_spending_table(self):
+        """Refresh the list of months in the dropdown."""
+        self.month_list = self.get_month_list()
+        self.month_input.clear()
+        self.month_input.addItems(self.month_list)
 
     def get_month_list(self):
         """Get a list of months with transactions."""
@@ -448,6 +551,38 @@ class BudgetTracker(QMainWindow):
             else:
                 QMessageBox.warning(self, "Error", str(e))
 
+    def import_excel_tab(self):
+        """Create the tab for importing Excel files."""
+        self.tab4 = QWidget()
+        self.tabs.addTab(self.tab4, "Excel Input")
+        self.tab4_layout = QGridLayout(self.tab4)
+
+        self.select_file_button = QPushButton('Select Excel File')
+        self.select_file_button.clicked.connect(self.open_file_dialog)
+        self.tab4_layout.addWidget(self.select_file_button, 0, 0)
+
+        self.clear_transactions_button = QPushButton('Clear Transactions')
+        self.clear_transactions_button.clicked.connect(self.clear_transactions)
+        self.tab4_layout.addWidget(self.clear_transactions_button, 1, 0)
+
+    def open_file_dialog(self):
+        """Open a file dialog to select an Excel file."""
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
+        if file_name:
+            self.read_and_update_database(file_name)
+
+    def clear_transactions(self):
+        """Clear all transactions from the database."""
+        query = QSqlQuery()
+        if query.exec_("DELETE FROM transactions"):
+            QMessageBox.information(self, "Transactions Cleared", "Transactions in database have been cleared.")
+            self.refresh_ledger_table()
+            self.refresh_monthly_spending_table()
+        else:
+            print("Error: ", query.lastError().text())
+
     def read_and_update_database(self, file_path):
         """Read an Excel file and update the database with its contents."""
         df = pd.read_excel(file_path)
@@ -455,7 +590,7 @@ class BudgetTracker(QMainWindow):
         if not self.db.isOpen():
             if not self.db.open():
                 print("Error: ", self.db.lastError().text())
-                return []
+                return
         for month_col in df.columns[1:]:
             month_year = datetime.strptime(month_col, '%b-%y')
             date_col = month_year.strftime('%d-%b-%y')
@@ -470,33 +605,12 @@ class BudgetTracker(QMainWindow):
         self.refresh_ledger_table()
         self.refresh_monthly_spending_table()
 
-    def open_file_dialog(self):
-        """Open a file dialog to select an Excel file."""
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx);;All Files (*)", options=options)
-        if file_name:
-            self.read_and_update_database(file_name)
-
-    def clear_transactions(self):
-        """Clear all transactions from the database."""
-        query = QSqlQuery()
-        if query.exec_("DELETE FROM transactions"):
-            QMessageBox.information(self, "Transactions Cleared", "Transactions in database has been cleared.")
-            self.refresh_ledger_table()
-            self.refresh_monthly_spending_table()
-        else:
-            print("Error: ", query.lastError().text())
-
-    def closeEvent(self, event):
-        """Handle the close event to ensure the database is closed."""
-        if hasattr(self, 'db') and self.db.isOpen():
-            self.db.close()
-            print("Database connection closed.")
-        event.accept()
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = BudgetTracker()
-    window.show()
-    sys.exit(app.exec_())
+    try:
+        window = BudgetTracker()
+        window.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        sys.exit(1)
